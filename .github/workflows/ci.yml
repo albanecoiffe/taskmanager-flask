@@ -1,0 +1,94 @@
+# ---------------------------------------------------------
+# TP part 6 - CI/CD Pipeline
+# ---------------------------------------------------------
+name: CI/CD Pipeline
+
+# consignes:
+# On Pull Request (dev, main) and Push to dev (6.1)
+on:
+  push:
+    branches: ["dev", "main"]
+  pull_request:
+    branches: ["dev", "main"]
+
+jobs:
+
+  # ---------------------------------------------------------
+  # Lint + Tests (Unit + Integration + E2E) (6.1)
+  # ---------------------------------------------------------
+  test:
+    runs-on: ubuntu-latest
+
+    services:
+      postgres:
+        image: postgres:15
+        env:
+          POSTGRES_USER: test
+          POSTGRES_PASSWORD: test
+          POSTGRES_DB: testdb
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+          pip install pytest selenium webdriver-manager
+
+      - name: Run unit tests
+        run: pytest tests/test_unit.py
+
+      - name: Run integration tests
+        run: pytest tests/test_integration.py
+
+      - name: Run E2E tests
+        run: pytest tests/test_e2e.py
+
+
+  # ---------------------------------------------------------
+  # Build Docker image on EVERY push (6.1)
+  # ---------------------------------------------------------
+  build:
+    runs-on: ubuntu-latest
+    needs: test
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Build Docker image (validation only)
+        run: docker build -t app:latest .
+
+
+  # ---------------------------------------------------------
+  # 3) Push Docker image on main ONLY (6.2)
+  # ---------------------------------------------------------
+  deploy:
+    runs-on: ubuntu-latest
+    needs: build
+    if: github.ref == 'refs/heads/main'
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Login to DockerHub
+        run: echo "${{ secrets.DOCKERHUB_TOKEN }}" | docker login -u "${{ secrets.DOCKERHUB_USERNAME }}" --password-stdin
+
+      - name: Build image
+        run: docker build -t ${{ secrets.DOCKERHUB_USERNAME }}/taskmanager:latest .
+
+      - name: Push image
+        run: docker push ${{ secrets.DOCKERHUB_USERNAME }}/taskmanager:latest
