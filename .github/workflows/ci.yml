@@ -1,10 +1,8 @@
-# ---------------------------------------------------------
-# TP part 6 - CI/CD Pipeline
-# ---------------------------------------------------------
 name: CI/CD Pipeline
 
-# consignes:
-# On Pull Request (dev, main) and Push to dev (6.1)
+# ---------------------------------------------------------
+# 6.1 — Run tests on PR (dev, main) & push to dev/main
+# ---------------------------------------------------------
 on:
   push:
     branches: ["dev", "main"]
@@ -14,12 +12,11 @@ on:
 jobs:
 
   # ---------------------------------------------------------
-  # Lint + Tests (Unit + Integration + E2E) (6.1)
+  # TEST JOB (unit + integration + E2E)
   # ---------------------------------------------------------
   test:
+    name: Run tests
     runs-on: ubuntu-latest
-    env:
-    CI: "true"
 
     services:
       postgres:
@@ -29,12 +26,16 @@ jobs:
           POSTGRES_PASSWORD: test
           POSTGRES_DB: testdb
         ports:
-          - 5432:5432
+          - "5432:5432"
         options: >-
           --health-cmd pg_isready
           --health-interval 10s
           --health-timeout 5s
           --health-retries 5
+
+    env:
+      # Override DB URL specifically for CI tests
+      DATABASE_URL: postgresql://test:test@localhost:5432/testdb
 
     steps:
       - name: Checkout repo
@@ -47,7 +48,7 @@ jobs:
 
       - name: Install dependencies
         run: |
-          python -m pip install --upgrade pip
+          pip install --upgrade pip
           pip install -r requirements.txt
           pip install pytest selenium webdriver-manager
 
@@ -60,9 +61,8 @@ jobs:
       - name: Run E2E tests
         run: pytest tests/test_e2e.py
 
-
   # ---------------------------------------------------------
-  # Build Docker image on EVERY push (6.1)
+  # 6.1 — Build Docker Image (validation only)
   # ---------------------------------------------------------
   build:
     runs-on: ubuntu-latest
@@ -71,12 +71,11 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Build Docker image (validation only)
+      - name: Build Docker image
         run: docker build -t app:latest .
 
-
   # ---------------------------------------------------------
-  # 3) Push Docker image on main ONLY (6.2)
+  # 6.2 — Deploy (ONLY on push to main)
   # ---------------------------------------------------------
   deploy:
     runs-on: ubuntu-latest
@@ -89,8 +88,8 @@ jobs:
       - name: Login to DockerHub
         run: echo "${{ secrets.DOCKERHUB_TOKEN }}" | docker login -u "${{ secrets.DOCKERHUB_USERNAME }}" --password-stdin
 
-      - name: Build image
+      - name: Build Docker image
         run: docker build -t ${{ secrets.DOCKERHUB_USERNAME }}/taskmanager:latest .
 
-      - name: Push image
+      - name: Push Docker image
         run: docker push ${{ secrets.DOCKERHUB_USERNAME }}/taskmanager:latest
