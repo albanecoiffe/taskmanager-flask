@@ -20,10 +20,10 @@ jobs:
         ports:
           - "5432:5432"
         options: >-
-          --health-cmd "pg_isready -U test -d testdb"
-          --health-interval 5s
+          --health-cmd pg_isready
+          --health-interval 10s
           --health-timeout 5s
-          --health-retries 10
+          --health-retries 5
 
     env:
       DATABASE_URL: postgresql://test:test@localhost:5432/testdb
@@ -31,14 +31,14 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      # Chrome
+      # Install Chrome
       - name: Install Google Chrome
         run: |
           sudo apt-get update
           sudo apt-get install -y wget gnupg
           wget -q -O - https://dl.google.com/linux/linux_signing_key.pub | sudo apt-key add -
-          echo "deb [arch=amd64] http://dl.google.com/linux/chrome/deb/ stable main" \
-            | sudo tee /etc/apt/sources.list.d/google-chrome.list
+          echo "deb [arch=amd64] http://dl.google.com/linux/chrome/deb/ stable main" | \
+            sudo tee /etc/apt/sources.list.d/google-chrome.list
           sudo apt-get update
           sudo apt-get install -y google-chrome-stable
 
@@ -52,18 +52,15 @@ jobs:
         run: |
           pip install --upgrade pip
           pip install -r requirements.txt
-          pip install pytest selenium webdriver-manager
+          pip install pytest selenium webdriver-manager requests
 
-      # ---- WAIT FOR POSTGRES ----
-      - name: Wait for Postgres
+      # Launch Flask server for E2E
+      - name: Start Flask server
         run: |
-          for i in {1..20}; do
-            pg_isready -h localhost -U test -d testdb && break
-            echo "Postgres not ready yet..."
-            sleep 1
-          done
+          python app.py &
+          sleep 5
 
-      # ---- TESTS ----
+      # Run tests
       - name: Unit tests
         run: pytest tests/test_unit.py -v
 
@@ -71,10 +68,8 @@ jobs:
         run: pytest tests/test_integration.py -v
 
       - name: E2E tests
-        run: |
-          python app.py &
-          sleep 8
-          pytest tests/test_e2e.py -v
+        run: pytest tests/test_e2e.py -v
+
 
   build:
     runs-on: ubuntu-latest
@@ -84,6 +79,7 @@ jobs:
       - uses: actions/checkout@v4
       - name: Build Docker image
         run: docker build -t app:latest .
+
 
   deploy:
     runs-on: ubuntu-latest
