@@ -89,12 +89,24 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Login to DockerHub
+      # ---- Installer Docker ----
+      - name: Install Docker
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y docker.io
+          sudo systemctl start docker
+          sudo systemctl enable docker
+          docker --version
+
+      # ---- Login DockerHub ----
+      - name: Login DockerHub
         run: echo "${{ secrets.DOCKERHUB_TOKEN }}" | \
-          docker login -u "${{ secrets.DOCKERHUB_USERNAME }}" --password-stdin
+            sudo docker login -u "${{ secrets.DOCKERHUB_USERNAME }}" --password-stdin
 
+      # ---- Build ----
       - name: Build image
-        run: docker build -t ${{ secrets.DOCKERHUB_USERNAME }}/taskmanager:latest .
+        run: sudo docker build -t ${{ secrets.DOCKERHUB_USERNAME }}/taskmanager:latest .
 
+      # ---- Push ----
       - name: Push image
-        run: docker push ${{ secrets.DOCKERHUB_USERNAME }}/taskmanager:latest
+        run: sudo docker push ${{ secrets.DOCKERHUB_USERNAME }}/taskmanager:latest
