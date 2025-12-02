@@ -7,9 +7,7 @@ from models import User, Task
 
 @pytest.fixture
 def client():
-    """Configure une app Flask de test avec DB SQLite en mémoire."""
-    app = create_app()
-    app.config.update(
+    app = create_app(
         {
             "TESTING": True,
             "SQLALCHEMY_DATABASE_URI": "sqlite:///:memory:",
@@ -17,11 +15,8 @@ def client():
         }
     )
 
-    with app.app_context():
-        db.drop_all()
-        db.create_all()
-
-    return app.test_client()
+    with app.test_client() as client:
+        yield client
 
 
 def register(client, username="alice", password="secret"):

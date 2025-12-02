@@ -1,6 +1,7 @@
 import os
 from datetime import datetime, date
 from functools import wraps
+from extensions import db
 
 from flask import (
     Flask,
@@ -32,18 +33,23 @@ def _build_postgres_uri() -> str:
     return f"postgresql+psycopg2://{user}:{password}@{host}:{port}/{name}"
 
 
-def create_app():
+# app.py
+
+
+def create_app(config=None):
     app = Flask(__name__)
-
-    if os.environ.get("CI") == "true":
-        app.config["SQLALCHEMY_DATABASE_URI"] = "sqlite:///:memory:"
-    else:
-        app.config["SQLALCHEMY_DATABASE_URI"] = _build_postgres_uri()
-
-    app.config["SECRET_KEY"] = os.environ.get("SECRET_KEY", "dev-unsafe-secret")
+    app.config["SECRET_KEY"] = os.environ.get("SECRET_KEY", "dev-key")
+    app.config["SQLALCHEMY_DATABASE_URI"] = _build_postgres_uri()
     app.config["SQLALCHEMY_TRACK_MODIFICATIONS"] = False
-
+    if config:
+        app.config.update(config)
     db.init_app(app)
+    with app.app_context():
+        from models import User, Task
+
+        db.create_all()
+    register_routes(app)
+    return app
 
 
 def login_required(view):
