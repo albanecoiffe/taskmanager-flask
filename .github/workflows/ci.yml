@@ -83,30 +83,27 @@ jobs:
 
   deploy:
     runs-on: ubuntu-latest
-    needs: build
+    needs: test
     if: github.ref == 'refs/heads/main'
 
     steps:
       - uses: actions/checkout@v4
 
-      # ---- Installer Docker ----
-      - name: Install Docker
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y docker.io
-          sudo systemctl start docker
-          sudo systemctl enable docker
-          docker --version
+      # ------------------------------
+      # Login to DockerHub (OFFICIEL)
+      # ------------------------------
+      - name: Login to DockerHub
+        uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
 
-      # ---- Login DockerHub ----
-      - name: Login DockerHub
-        run: echo "${{ secrets.DOCKERHUB_TOKEN }}" | \
-            sudo docker login -u "${{ secrets.DOCKERHUB_USERNAME }}" --password-stdin
-
-      # ---- Build ----
-      - name: Build image
-        run: sudo docker build -t ${{ secrets.DOCKERHUB_USERNAME }}/taskmanager:latest .
-
-      # ---- Push ----
-      - name: Push image
-        run: sudo docker push ${{ secrets.DOCKERHUB_USERNAME }}/taskmanager:latest
+      # ------------------------------
+      # Build and Push
+      # ------------------------------
+      - name: Build and Push Docker image
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          push: true
+          tags: ${{ secrets.DOCKERHUB_USERNAME }}/taskmanager:latest
