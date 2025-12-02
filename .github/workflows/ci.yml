@@ -1,8 +1,5 @@
 name: CI/CD Pipeline
 
-# ---------------------------------------------------------
-# 6.1 — Run tests on PR (dev, main) & push to dev/main
-# ---------------------------------------------------------
 on:
   push:
     branches: ["dev", "main"]
@@ -10,12 +7,10 @@ on:
     branches: ["dev", "main"]
 
 jobs:
-
   # ---------------------------------------------------------
-  # TEST JOB (unit + integration + E2E)
+  # TESTS (unit + integration + e2e)
   # ---------------------------------------------------------
   test:
-    name: Run tests
     runs-on: ubuntu-latest
 
     services:
@@ -34,13 +29,23 @@ jobs:
           --health-retries 5
 
     env:
-      # Override DB URL specifically for CI tests
       DATABASE_URL: postgresql://test:test@localhost:5432/testdb
 
     steps:
-      - name: Checkout repo
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
 
+      # ---- Installer Google Chrome (obligatoire pour Selenium) ----
+      - name: Install Google Chrome
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y wget gnupg
+          wget -q -O - https://dl.google.com/linux/linux_signing_key.pub | sudo apt-key add -
+          echo "deb [arch=amd64] http://dl.google.com/linux/chrome/deb/ stable main" | \
+            sudo tee /etc/apt/sources.list.d/google-chrome.list
+          sudo apt-get update
+          sudo apt-get install -y google-chrome-stable
+
+      # ---- Python ----
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
@@ -52,17 +57,22 @@ jobs:
           pip install -r requirements.txt
           pip install pytest selenium webdriver-manager
 
-      - name: Run unit tests
-        run: pytest tests/test_unit.py
+      # ---- Tests ----
+      - name: Unit tests
+        run: pytest tests/test_unit.py -v
 
-      - name: Run integration tests
-        run: pytest tests/test_integration.py
+      - name: Integration tests
+        run: pytest tests/test_integration.py -v
 
-      - name: Run E2E tests
-        run: pytest tests/test_e2e.py
+      - name: E2E tests
+        run: |
+          # Lancer ton app Flask en arrière-plan
+          python app.py &
+          sleep 5
+          pytest tests/test_e2e.py -v
 
   # ---------------------------------------------------------
-  # 6.1 — Build Docker Image (validation only)
+  # BUILD DOCKER
   # ---------------------------------------------------------
   build:
     runs-on: ubuntu-latest
@@ -70,12 +80,11 @@ jobs:
 
     steps:
       - uses: actions/checkout@v4
-
       - name: Build Docker image
         run: docker build -t app:latest .
 
   # ---------------------------------------------------------
-  # 6.2 — Deploy (ONLY on push to main)
+  # DEPLOY (seulement sur main)
   # ---------------------------------------------------------
   deploy:
     runs-on: ubuntu-latest
@@ -85,11 +94,12 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Login to DockerHub
-        run: echo "${{ secrets.DOCKERHUB_TOKEN }}" | docker login -u "${{ secrets.DOCKERHUB_USERNAME }}" --password-stdin
+      - name: Login DockerHub
+        run: echo "${{ secrets.DOCKERHUB_TOKEN }}" |
+             docker login -u "${{ secrets.DOCKERHUB_USERNAME }}" --password-stdin
 
-      - name: Build Docker image
+      - name: Build image
         run: docker build -t ${{ secrets.DOCKERHUB_USERNAME }}/taskmanager:latest .
 
-      - name: Push Docker image
+      - name: Push image
         run: docker push ${{ secrets.DOCKERHUB_USERNAME }}/taskmanager:latest
